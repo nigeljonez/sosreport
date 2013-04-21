@@ -46,6 +46,7 @@ from collections import deque
 from itertools import izip
 import textwrap
 import tempfile
+import pwd
 
 from sos import _sos as _
 from sos import __version__
@@ -778,6 +779,18 @@ class SoSReport(object):
 
         self.tempfile_util.clean()
 
+        # if the user wants the sosreport chown'ed to someone else
+        if self.opts.save_as:
+            try:
+                # get uid, this may raise KeyError if it can't lookup
+                save_uid = pwd.getpwnam(self.opts.save_as).pw_uid
+                # change UID, leave GID as-is, may raise OSError
+                os.chown(final_filename, save_uid, -1)
+            except KeyError:
+                self.soslog.error(_("unable to find user %s, saving as current user" % (self.opts.save_as)))
+            except OSError:
+                self.soslog.error(_("unable to save report as %s, saving as current user" % (self.opts.save_as)))
+
         return final_filename
 
     def ensure_plugins(self):
@@ -843,6 +856,10 @@ class SoSReport(object):
         parser.add_option("-z", "--compression-type", dest="compression_type",
                             help="compression technology to use [auto, zip, gzip, bzip2, xz] (default=auto)",
                             default="auto")
+        parser.add_option("--save-as", action="store",
+                             dest="save_as",
+                             help="Alternate user name to save the resulting file(s) to",
+                             default=None)
 
         return parser.parse_args(args)
 
